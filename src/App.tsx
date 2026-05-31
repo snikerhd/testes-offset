@@ -48,6 +48,7 @@ const TABS = [
   { id: "Catálogo", icon: BookOpen, label: "Catálogo" },
   { id: "Perfis", icon: Layers, label: "Perfis" },
   { id: "Coimas Rápidas PT", icon: Calculator, label: "Coimas Rápidas" },
+  { id: "Homicídios", icon: Gavel, label: "Homicídios" },
   { id: "Relatório", icon: FileSpreadsheet, label: "Relatório" },
 ];
 
@@ -77,12 +78,12 @@ export default function App() {
   // Sequestro
   const [seqCivis, setSeqCivis] = useState(0);
   const [seqFunc, setSeqFunc] = useState(0);
-  const [homCivis, setHomCivis] = useState(0);
-  const [homFunc, setHomFunc] = useState(0);
-  const [homQCivis, setHomQCivis] = useState(0);
-  const [homQFunc, setHomQFunc] = useState(0);
-  const [homTentativa, setHomTentativa] = useState(false);
-  const [homQTentativa, setHomQTentativa] = useState(false);
+  const [homCivis,setHomCivis]=useState(0);
+  const [homFunc,setHomFunc]=useState(0);
+  const [homQCivis,setHomQCivis]=useState(0);
+  const [homQFunc,setHomQFunc]=useState(0);
+  const [homTent,setHomTent]=useState(false);
+  const [homQTent,setHomQTent]=useState(false);
 
   // Dinheiro
   const [dinheiroValor, setDinheiroValor] = useState(0);
@@ -251,6 +252,14 @@ export default function App() {
     } else showAlert("Nenhum refém informado.");
   };
 
+  
+const addHomicidios = () => {
+ const cc=getCc();
+ const v1=((homCivis*85000)+(homFunc*100000))*(homTent?0.75:1);
+ const v2=((homQCivis*100000)+(homQFunc*115000))*(homQTent?0.75:1);
+ if(v1>0) addExtra(cc,`HOMICÍDIO${homTent?' (Tentativa)':''}: ${homCivis} civis, ${homFunc} func. → ${fmt2(v1)} €`,v1);
+ if(v2>0) addExtra(cc,`HOMICÍDIO QUALIFICADO${homQTent?' (Tentativa)':''}: ${homQCivis} civis, ${homQFunc} func. → ${fmt2(v2)} €`,v2);
+};
   // ========== TAB: DINHEIRO ==========
   const addDinheiro = () => {
     if (dinheiroValor <= 10000) { showAlert("Quantidade Legal"); return; }
@@ -609,11 +618,6 @@ export default function App() {
         for (const entry of extraEntries) {
           linhas.push(`  ${entry.desc}`);
         }
-        const homicidioValor = ((homCivis*85000)+(homFunc*100000)) * (homTentativa ? 0.75 : 1);
-        const homicidioQValor = ((homQCivis*100000)+(homQFunc*115000)) * (homQTentativa ? 0.75 : 1);
-        if ((homCivis+homFunc)>0) linhas.push(`  HOMICÍDIO${homTentativa ? ' (Tentativa)' : ''}: ${homCivis} civis, ${homFunc} func. → ${fmt2(homicidioValor)} €`);
-        if ((homQCivis+homQFunc)>0) linhas.push(`  HOMICÍDIO QUALIFICADO${homQTentativa ? ' (Tentativa)' : ''}: ${homQCivis} civis, ${homQFunc} func. → ${fmt2(homicidioQValor)} €`);
-
         if (sequestroMultaRel > 0) {
           let seqDesc = `  Sequestro: ${relCivis} civis (9.000€)`;
           if (relFunc > 0) seqDesc += ` + ${relFunc} func. públicos (15.000€)`;
@@ -831,7 +835,24 @@ export default function App() {
           </div>
         )}
 
-        {/* DINHEIRO */}
+        
+{activeTab === "Homicídios" && (
+<div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
+<h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4">Homicídios</h2>
+<div className="grid grid-cols-2 gap-3">
+<div><label className={labelCls}>Homicídio Civis</label><input type="number" value={homCivis} onChange={e=>setHomCivis(Number(e.target.value))} className={inputCls}/></div>
+<div><label className={labelCls}>Homicídio Func.</label><input type="number" value={homFunc} onChange={e=>setHomFunc(Number(e.target.value))} className={inputCls}/></div>
+</div>
+<label><input type="checkbox" checked={homTent} onChange={e=>setHomTent(e.target.checked)}/> Tentativa x0.75</label>
+<div className="grid grid-cols-2 gap-3 mt-3">
+<div><label className={labelCls}>Hom. Qualificado Civis</label><input type="number" value={homQCivis} onChange={e=>setHomQCivis(Number(e.target.value))} className={inputCls}/></div>
+<div><label className={labelCls}>Hom. Qualificado Func.</label><input type="number" value={homQFunc} onChange={e=>setHomQFunc(Number(e.target.value))} className={inputCls}/></div>
+</div>
+<label><input type="checkbox" checked={homQTent} onChange={e=>setHomQTent(e.target.checked)}/> Tentativa x0.75</label>
+<button onClick={addHomicidios} className={`w-full mt-4 py-3 rounded-lg ${fillBtnTheme}`}>Adicionar</button>
+</div>)}
+
+{/* DINHEIRO */}
         {activeTab === "Dinheiro" && (
           <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
             <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4 flex items-center gap-2">
