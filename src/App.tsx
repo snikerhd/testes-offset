@@ -150,11 +150,6 @@ export default function App() {
   const [relPercCoima, setRelPercCoima] = useState(100);
   const [relPercSentenca, setRelPercSentenca] = useState(100);
   const [relatorio, setRelatorio] = useState("");
-  const [relCCCoima, setRelCCCoima] = useState("");
-  const [relCoimaRapida, setRelCoimaRapida] = useState("");
-  const [relCCCrimesNome, setRelCCCrimesNome] = useState("");
-  const [relCrimesNome, setRelCrimesNome] = useState("");
-  const [relTentativa, setRelTentativa] = useState(false);
   const [relCCCAD, setRelCCCAD] = useState("");
   const [relMesesCAD, setRelMesesCAD] = useState(0);
   const [relValorCAD, setRelValorCAD] = useState(0);
@@ -536,59 +531,20 @@ export default function App() {
     showAlert(`Valor de ${fmt2(relValorCAD)} € e ${relMesesCAD} meses adicionados ao CAD do CC '${cc}'.`);
   };
 
-  const addCoimasRapidasRelatorio = () => {
-    const texto = relCoimaRapida.trim();
-    const cc = relCCCoima.trim() || "Geral";
-    if (!texto) { showAlert("Digite a lista de coimas rápidas."); return; }
-
-    const r = parseQuickInput(texto);
-    if (r.totalGeral === 0) { showAlert("Nenhuma coima válida calculada."); return; }
-
-    const blocos: string[] = [];
-    if (r.drogas.subtotal > 0) blocos.push(`• Drogas: ${fmt(r.drogas.subtotal)} €`);
-    if (r.itens.subtotal > 0) blocos.push(`• Itens Ilegais: ${fmt(30000 + r.itens.subtotal)} €`);
-    if (r.municao.total > 0) blocos.push(`• Munição: ${fmt(r.municao.base + r.municao.total)} €`);
-    if (r.armas.total > 0) blocos.push(`• Armas Grande Qtde: ${fmt(r.armas.total)} €`);
-    if (r.dinheiro.total > 0) blocos.push(`• Dinheiro não declarado: ${fmt(r.dinheiro.total)} €`);
-    if (r.sequestro.total > 0) blocos.push(`• Sequestro: ${fmt(r.sequestro.total)} €`);
-    if (r.crimes.totalMulta > 0) blocos.push(`• Crimes: ${fmt(r.crimes.totalMulta)} €`);
-
-    const blocoCompleto = blocos.join("\n");
-    addExtra(cc, blocoCompleto, r.totalGeral);
-    setRelCoimaRapida(""); setRelCCCoima("");
-    showAlert(`Coimas extras no valor de ${fmt2(r.totalGeral)} € para CC '${cc}'.`);
-  };
-
-  const addCrimesPorNome = () => {
-    const texto = relCrimesNome.trim();
-    const cc = relCCCrimesNome.trim() || "Geral";
-    if (!texto) { showAlert("Digite a lista de crimes."); return; }
-    const { descricoes, totalMulta, totalMeses } = parseCrimesInput(texto, relTentativa);
-    if (totalMulta === 0 && !descricoes.some(d => d.includes("⚠️"))) {
-      showAlert("Nenhum crime válido identificado."); return;
-    }
-    addCAD(cc, descricoes.join("\n"), totalMeses, totalMulta);
-    setRelCrimesNome(""); setRelCCCrimesNome(""); setRelTentativa(false);
-    showAlert(`Crimes adicionados ao CAD do CC '${cc}'. Total: ${fmt2(totalMulta)} €, ${totalMeses.toFixed(1)} meses`);
-  };
-
-  // ========== FUNÇÃO GERAR RELATÓRIO (MODIFICADA COM CP NA PRODUÇÃO) ==========
+  // ========== FUNÇÃO GERAR RELATÓRIO (COM PRODUÇÃO DE DROGA) ==========
   const gerarRelatorio = () => {
     const ccs = relCCs.trim().split("\n").map(l => l.trim()).filter(Boolean);
     const linhas: string[] = [];
 
-    // --- RESUMO (com tratamento especial para Produção de Droga) ---
     let resumo = "📝 Resumo:\n";
     const isProducaoDroga = relTipo === "Produção de droga";
 
     if (isProducaoDroga) {
-      // Texto para produção de droga com CP
       if (relCP) {
         resumo += `Recebemos um alerta de produção de droga, chegamos ao local no cp ${relCP} encontramos ${relAssaltantes} sujeito${relAssaltantes !== 1 ? 's' : ''} a processar.`;
       } else {
         resumo += `Recebemos um alerta de produção de droga, chegamos ao local encontramos ${relAssaltantes} sujeito${relAssaltantes !== 1 ? 's' : ''} a processar.`;
       }
-      // Adiciona a observação (sem "os assaltantes")
       let obs = relObs.trim();
       obs = obs.replace(/passado alguns minutos\.?/i, '').trim();
       if (obs) {
@@ -596,7 +552,6 @@ export default function App() {
         resumo += ` ${obs}`;
       }
     } else {
-      // Modo normal para os outros tipos de crime
       if (relCP) {
         resumo += `Houve um ${relTipo} no cp ${relCP}, tinha ${relAssaltantes} assaltante${relAssaltantes !== 1 ? 's' : ''} e ${relCivis} refém${relCivis !== 1 ? 's' : ''} civis`;
       } else {
@@ -617,7 +572,6 @@ export default function App() {
     linhas.push(resumo);
     linhas.push("");
 
-    // --- EVIDÊNCIAS ---
     linhas.push("-----------------------------📸 EVIDÊNCIAS 📸------------------------------");
     for (const cc of ccs) {
       linhas.push(cc);
@@ -628,7 +582,6 @@ export default function App() {
     }
     linhas.push("");
 
-    // --- COIMAS POR CC ---
     for (const cc of ccs) {
       linhas.push(`================== CC: ${cc} ==================`);
       linhas.push("--- Coimas CAD ---");
@@ -671,12 +624,10 @@ export default function App() {
       linhas.push("");
     }
 
-    // --- MEDIAÇÃO ---
     linhas.push("------------------------------- MEDIAÇÃO -------------------------------");
     linhas.push(`Mediação ao cargo da ${relAdvogado} devido ao facto de não se encontrarem advogados presentes ao serviço no momento da detenção. A mediação foi efetuada após acordo mútuo entre ambas as partes, sendo a coima a ${relPercCoima}% e a sentença a ${relPercSentenca}%.`);
     linhas.push("");
 
-    // --- VALORES APÓS MEDIAÇÃO ---
     for (const cc of ccs) {
       const cadEntries = cadPorCC[cc] || [];
       const extraEntries = extraPorCC[cc] || [];
@@ -910,7 +861,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ITENS ILEGAIS */}
+        {/* ITENS ILEGAIS - IMAGENS GRANDES À DIREITA */}
         {activeTab === "Itens Ilegais" && (
           <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
             <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4 flex items-center gap-2">
@@ -957,7 +908,7 @@ export default function App() {
           </div>
         )}
 
-        {/* DROGAS */}
+        {/* DROGAS - IMAGENS GRANDES À ESQUERDA */}
         {activeTab === "Drogas" && (
           <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
             <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4 flex items-center gap-2">
@@ -1113,7 +1064,7 @@ export default function App() {
           </div>
         )}
 
-        {/* RELATÓRIO */}
+        {/* RELATÓRIO - APENAS COM VALOR DO CAD RESTAURADO */}
         {activeTab === "Relatório" && (
           <div className="space-y-4">
             <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
@@ -1139,11 +1090,24 @@ export default function App() {
               </div>
             </div>
 
+            {/* ===== SECÇÃO VALOR DO CAD ===== */}
+            <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
+              <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4">📋 Valor do CAD</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div><label className={labelCls}>CC:</label><input value={relCCCAD} onChange={e => setRelCCCAD(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Meses:</label><input type="number" value={relMesesCAD} onChange={e => setRelMesesCAD(Number(e.target.value))} className={inputCls} /></div>
+                <div><label className={labelCls}>Valor (€):</label><input type="number" value={relValorCAD} onChange={e => setRelValorCAD(Number(e.target.value))} className={inputCls} /></div>
+                <div className="flex items-end"><button onClick={addValorCAD} className={`w-full py-2 rounded text-xs font-bold uppercase ${fillBtnTheme} cursor-pointer`}>Adicionar</button></div>
+              </div>
+            </div>
+
+            {/* CC dos Suspeitos */}
             <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
               <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4">👥 CC dos Suspeitos (um por linha)</h2>
               <textarea value={relCCs} onChange={e => setRelCCs(e.target.value)} rows={4} className={inputCls} placeholder={"222\n333"} />
             </div>
 
+            {/* Mediação */}
             <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
               <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4">🤝 Mediação</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1153,6 +1117,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Entradas Registadas */}
             {allCCsWithEntries.length > 0 && (
               <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
                 <div className="flex items-center justify-between mb-4">
@@ -1176,12 +1141,14 @@ export default function App() {
               </div>
             )}
 
+            {/* Botões */}
             <div className="flex gap-3">
               <button onClick={gerarRelatorio} className={`px-6 py-3 rounded-lg text-xs font-extrabold uppercase tracking-widest transition-all ${fillBtnTheme} cursor-pointer`}>Gerar Relatório</button>
               <button onClick={copiarRelatorio} className="px-4 py-3 rounded-lg bg-white/10 text-xs text-gray-300 hover:text-white hover:bg-white/20 cursor-pointer">Copiar Relatório</button>
               <button onClick={() => setRelatorio("")} className="px-3 py-3 rounded bg-white/10 text-xs text-gray-400 hover:text-white cursor-pointer">Limpar</button>
             </div>
 
+            {/* Output */}
             {relatorio && (
               <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
                 <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4">📄 Relatório Gerado</h2>
