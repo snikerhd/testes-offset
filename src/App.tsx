@@ -172,7 +172,7 @@ export default function App() {
   const [alertMsg, setAlertMsg] = useState("");
   const alertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load profiles from localStorage
+  // Load profiles
   useEffect(() => {
     try {
       const saved = localStorage.getItem("perfis_coimas");
@@ -180,7 +180,7 @@ export default function App() {
     } catch { /* empty */ }
   }, []);
 
-  // System clock
+  // Clock
   useEffect(() => {
     const timer = setInterval(() => {
       systemTimeRef.current = new Date();
@@ -259,9 +259,9 @@ export default function App() {
   };
 
   const addHomicidios = () => {
-    const cc=getCc();
-    const v1=((homCivis*85000)+(homFunc*100000))*(homTent?0.75:1);
-    const v2=((homQCivis*100000)+(homQFunc*115000))*(homQTent?0.75:1);
+    const cc = getCc();
+    const v1 = ((homCivis*85000)+(homFunc*100000))*(homTent?0.75:1);
+    const v2 = ((homQCivis*100000)+(homQFunc*115000))*(homQTent?0.75:1);
     if(v1>0) addExtra(cc,`HOMICÍDIO${homTent?' (Tentativa)':''}: ${homCivis} civis, ${homFunc} func. → ${fmt2(v1)} €`,v1);
     if(v2>0) addExtra(cc,`HOMICÍDIO QUALIFICADO${homQTent?' (Tentativa)':''}: ${homQCivis} civis, ${homQFunc} func. → ${fmt2(v2)} €`,v2);
   };
@@ -572,16 +572,52 @@ export default function App() {
     showAlert(`Crimes adicionados ao CAD do CC '${cc}'. Total: ${fmt2(totalMulta)} €, ${totalMeses.toFixed(1)} meses`);
   };
 
+  // ========== FUNÇÃO GERAR RELATÓRIO (MODIFICADA COM CP NA PRODUÇÃO) ==========
   const gerarRelatorio = () => {
     const ccs = relCCs.trim().split("\n").map(l => l.trim()).filter(Boolean);
     const linhas: string[] = [];
 
-    linhas.push("📝 Resumo:");
-    if (relCP) linhas.push(`${relTipo} (cp da ${relCP}), tinha ${relAssaltantes} assaltante e ${relCivis} reféns civis e ${relFunc} funcionários públicos.`);
-    else linhas.push(`${relTipo}, tinha ${relAssaltantes} assaltante e ${relCivis} reféns civis e ${relFunc} funcionários públicos.`);
-    linhas.push(relObs);
+    // --- RESUMO (com tratamento especial para Produção de Droga) ---
+    let resumo = "📝 Resumo:\n";
+    const isProducaoDroga = relTipo === "Produção de droga";
+
+    if (isProducaoDroga) {
+      // Texto para produção de droga com CP
+      if (relCP) {
+        resumo += `Recebemos um alerta de produção de droga, chegamos ao local no cp ${relCP} encontramos ${relAssaltantes} sujeito${relAssaltantes !== 1 ? 's' : ''} a processar.`;
+      } else {
+        resumo += `Recebemos um alerta de produção de droga, chegamos ao local encontramos ${relAssaltantes} sujeito${relAssaltantes !== 1 ? 's' : ''} a processar.`;
+      }
+      // Adiciona a observação (sem "os assaltantes")
+      let obs = relObs.trim();
+      obs = obs.replace(/passado alguns minutos\.?/i, '').trim();
+      if (obs) {
+        obs = obs.charAt(0).toUpperCase() + obs.slice(1);
+        resumo += ` ${obs}`;
+      }
+    } else {
+      // Modo normal para os outros tipos de crime
+      if (relCP) {
+        resumo += `Houve um ${relTipo} no cp ${relCP}, tinha ${relAssaltantes} assaltante${relAssaltantes !== 1 ? 's' : ''} e ${relCivis} refém${relCivis !== 1 ? 's' : ''} civis`;
+      } else {
+        resumo += `Houve um ${relTipo}, tinha ${relAssaltantes} assaltante${relAssaltantes !== 1 ? 's' : ''} e ${relCivis} refém${relCivis !== 1 ? 's' : ''} civis`;
+      }
+      if (relFunc > 0) {
+        resumo += ` e ${relFunc} funcionário${relFunc !== 1 ? 's' : ''} públicos`;
+      }
+      let obs = relObs.trim();
+      obs = obs.replace(/passado alguns minutos\.?/i, '').trim();
+      if (obs) {
+        obs = obs.charAt(0).toUpperCase() + obs.slice(1);
+        resumo += `, os assaltantes ${obs}.`;
+      } else {
+        resumo += `.`;
+      }
+    }
+    linhas.push(resumo);
     linhas.push("");
 
+    // --- EVIDÊNCIAS ---
     linhas.push("-----------------------------📸 EVIDÊNCIAS 📸------------------------------");
     for (const cc of ccs) {
       linhas.push(cc);
@@ -592,11 +628,11 @@ export default function App() {
     }
     linhas.push("");
 
+    // --- COIMAS POR CC ---
     for (const cc of ccs) {
       linhas.push(`================== CC: ${cc} ==================`);
       linhas.push("--- Coimas CAD ---");
       const cadEntries = cadPorCC[cc] || [];
-      
       if (cadEntries.length) {
         for (const entry of cadEntries) {
           linhas.push(`  ${entry.desc}`);
@@ -607,10 +643,8 @@ export default function App() {
       }
 
       linhas.push("--- Coimas Extras ---");
-      
       const extraEntries = extraPorCC[cc] || [];
       const sequestroMultaRel = calcSequestro(relCivis, relFunc);
-      
       if (extraEntries.length || sequestroMultaRel > 0) {
         for (const entry of extraEntries) {
           linhas.push(`  ${entry.desc}`);
@@ -637,10 +671,12 @@ export default function App() {
       linhas.push("");
     }
 
+    // --- MEDIAÇÃO ---
     linhas.push("------------------------------- MEDIAÇÃO -------------------------------");
-    linhas.push(`Mediação ao cargo da ${relAdvogado} devido ao facto de não se encontrarem advogados presentes ao serviço no momento da detenção. A mediação foi efetuada após acordo mútuo entre ambas as partes, sendo a coima ajustada para ${relPercCoima}% e a sentença ajustada para ${relPercSentenca}% do valor original.`);
+    linhas.push(`Mediação ao cargo da ${relAdvogado} devido ao facto de não se encontrarem advogados presentes ao serviço no momento da detenção. A mediação foi efetuada após acordo mútuo entre ambas as partes, sendo a coima a ${relPercCoima}% e a sentença a ${relPercSentenca}%.`);
     linhas.push("");
 
+    // --- VALORES APÓS MEDIAÇÃO ---
     for (const cc of ccs) {
       const cadEntries = cadPorCC[cc] || [];
       const extraEntries = extraPorCC[cc] || [];
@@ -874,7 +910,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ITENS ILEGAIS - IMAGENS GRANDES À DIREITA */}
+        {/* ITENS ILEGAIS */}
         {activeTab === "Itens Ilegais" && (
           <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
             <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4 flex items-center gap-2">
@@ -921,7 +957,7 @@ export default function App() {
           </div>
         )}
 
-        {/* DROGAS - IMAGENS GRANDES À ESQUERDA */}
+        {/* DROGAS */}
         {activeTab === "Drogas" && (
           <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
             <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4 flex items-center gap-2">
@@ -1077,22 +1113,31 @@ export default function App() {
           </div>
         )}
 
-        {/* RELATÓRIO - SEM AS SECÇÕES "ADICIONAR CRIMES POR NOME" E "VALOR DO CAD" */}
+        {/* RELATÓRIO */}
         {activeTab === "Relatório" && (
           <div className="space-y-4">
             <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
               <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4">📝 Dados da Ocorrência</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label className={labelCls}>Tipo de crime:</label><select value={relTipo} onChange={e => setRelTipo(e.target.value)} className={inputCls}><option>Assalto a loja</option><option>Assalto a casa</option><option>Assalto a joalharia</option><option>Assalto a banco</option><option>Assalto a loja de armas</option><option>Assalto a carrinha de valores</option><option>Roubo</option><option>Furto</option><option>Outro</option></select></div>
-                <div><label className={labelCls}>Número de assaltantes:</label><input type="number" value={relAssaltantes} onChange={e => setRelAssaltantes(Number(e.target.value))} className={inputCls} /></div>
+                <div><label className={labelCls}>Tipo de crime:</label>
+                  <select value={relTipo} onChange={e => setRelTipo(e.target.value)} className={inputCls}>
+                    <option>Assalto a loja</option>
+                    <option>Assalto a casa</option>
+                    <option>Assalto a joalharia</option>
+                    <option>Assalto a banco</option>
+                    <option>Assalto a AmmuNation</option>
+                    <option>Assalto a contentor</option>
+                    <option>Produção de droga</option>
+                    <option>Outro</option>
+                  </select>
+                </div>
+                <div><label className={labelCls}>Número de assaltantes / sujeitos:</label><input type="number" value={relAssaltantes} onChange={e => setRelAssaltantes(Number(e.target.value))} className={inputCls} /></div>
                 <div><label className={labelCls}>Número de reféns (civis):</label><input type="number" value={relCivis} onChange={e => setRelCivis(Number(e.target.value))} className={inputCls} /></div>
                 <div><label className={labelCls}>Funcionários Públicos:</label><input type="number" value={relFunc} onChange={e => setRelFunc(Number(e.target.value))} className={inputCls} /></div>
                 <div><label className={labelCls}>CP (Código Postal/Processo):</label><input value={relCP} onChange={e => setRelCP(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Observações:</label><input value={relObs} onChange={e => setRelObs(e.target.value)} className={inputCls} /></div>
               </div>
             </div>
-
-            {/* As secções "Adicionar Crimes por Nome" e "Valor do CAD" foram removidas */}
 
             <div className={`bg-slate-900/60 backdrop-blur-md rounded-xl p-5 border border-white/5 ${neonShadow}`}>
               <h2 className="text-sm uppercase font-extrabold tracking-wider text-gray-300 mb-4">👥 CC dos Suspeitos (um por linha)</h2>
